@@ -1,0 +1,13 @@
+
+*
+!/scripts
+!/testbenches
+!/excel
+!/REPORT
+!/README
+!.gitignore
+!*.sv
+!*.pdf
+!*.xlsx
+!*.docx
+!*.pptx
