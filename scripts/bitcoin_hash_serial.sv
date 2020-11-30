@@ -57,9 +57,21 @@ module bitcoin_hash(
 				h[5] <= 32'h9b05688c;
 				h[6] <= 32'h1f83d9ab;
 				h[7] <= 32'h5be0cd19;
+				
+				A <= 32'h6a09e667;
+				B <= 32'hbb67ae85;
+				C <= 32'h3c6ef372;
+				D <= 32'ha54ff53a;
+				E <= 32'h510e527f;
+				F <= 32'h9b05688c;
+				G <= 32'h1f83d9ab;
+				H <= 32'h5be0cd19;
+				
+				
 			end
 			WAITMEM: begin
-				if( ~M )
+			//$display("WAITMEM: msg_addr: %h, mem_we: %d", mem_addr,mem_we);
+				if( M == 0 )
 					mem_addr <= message_addr + 16'd1;
 				else
 					mem_addr <= message_addr + 16'd17;
@@ -67,11 +79,11 @@ module bitcoin_hash(
 				done <= 0;
 				wordExpand <= 1;
 				
-				{ A, B, C, D, E, F, G, H } <= { h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7] };
+				//{ A, B, C, D, E, F, G, H } <= { h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7] };
 				
 			end
 			READMEM: begin
-				//$display("msg_addr: %h, memIndex: %d, mem_read_data: %h", mem_addr, memIndex, mem_read_data );
+				//$display("msg_addr: %h, M: %d, nonce: %d, memIndex: %d, mem_read_data: %h,", mem_addr, M,NONCE,memIndex, mem_read_data,);
 				memIndex <= memIndex + 1; // Increment the index
 				mem_addr <= mem_addr + 16'd1;
 				
@@ -91,7 +103,7 @@ module bitcoin_hash(
 						w[14] <= 0;
 						w[15] <= 32'd640;
 						
-						h[0] <= hphase1[0]; // Phase 2 should have the h's from phase 1
+						h[0] <= hphase1[0];
 						h[1] <= hphase1[1];
 						h[2] <= hphase1[2];
 						h[3] <= hphase1[3];
@@ -99,6 +111,15 @@ module bitcoin_hash(
 						h[5] <= hphase1[5];
 						h[6] <= hphase1[6];
 						h[7] <= hphase1[7];
+						
+						A <= hphase1[0]; // Phase 2 should have the h's from phase 1
+						B <= hphase1[1];
+						C <= hphase1[2];
+						D <= hphase1[3];
+						E <= hphase1[4];
+						F <= hphase1[5];
+						G <= hphase1[6];
+						H <= hphase1[7];
 						
 						//mem_addr <= mem_addr + 16'd12;
 						end
@@ -130,6 +151,15 @@ module bitcoin_hash(
 						h[5] <= 32'h9b05688c;
 						h[6] <= 32'h1f83d9ab;
 						h[7] <= 32'h5be0cd19;
+						
+						A <= 32'h6a09e667;
+						B <= 32'hbb67ae85;
+						C <= 32'h3c6ef372;
+						D <= 32'ha54ff53a;
+						E <= 32'h510e527f;
+						F <= 32'h9b05688c;
+						G <= 32'h1f83d9ab;
+						H <= 32'h5be0cd19;
 						end
 						
 		
@@ -181,26 +211,28 @@ module bitcoin_hash(
 
 				M <= M + 1; // PREP MEM
 				memIndex <= 0; // PREP MEM
-				if(~M )
-					mem_addr <= message_addr + 16'd16; // PREP MEM
-				else begin
-					mem_addr <= output_addr;
+				if(M < 2) // M =0: first to second phase, M = 1: second to third phase, M = 3: end of third phase
+					mem_addr <= message_addr + 16'd16; // PREP MEM 
+				else 
+				begin
+					mem_addr <= output_addr + NONCE;
 					mem_we <= 1;
 				end
 			end
 			PREPWRT: begin
-				mem_addr <= output_addr;
+				//mem_addr <= output_addr + NONCE;
 				mem_write_data <= h[memIndex];
 			end
 			WRITEMSG: begin
-				//$display("Write message: output: %d, h0: %h", mem_addr, h[0]);
-				mem_addr <= mem_addr + NONCE;
-				mem_write_data <= h[0];
+				//$display("Write message: output address: %d, h0: %h", mem_addr, h[0]);
+				//mem_addr <= output_addr + NONCE;
+				//mem_write_data <= h[0];
 				M <= 1;
 				NONCE <= NONCE + 1;
+				mem_addr <= message_addr + 16'd16;
+				mem_we <= 0; // mem_we outside of if since we are only writing one word... could reduce a state here
 				if( NONCE == 15) begin
 					done <= 1;
-					mem_we <= 0;
 				end
 			end
 		endcase
@@ -217,7 +249,7 @@ module bitcoin_hash(
 			WAITMEM:
 				next_state = READMEM;
 			READMEM:
-				if( memIndex == 15 || (memIndex == 3 && M ==1 ) || (M ==2) )
+				if( memIndex == 15 || (memIndex == 3 && M ==1 ) || (M ==2) ) 
 					next_state = COMPUTE1;
 				else
 					next_state = READMEM;
@@ -227,9 +259,9 @@ module bitcoin_hash(
 				else
 					next_state = COMPUTE1;
 			UPDATEH:
-				if( M != 2 )
+				if( M < 2 ) // M= 0 for first to second phase, M = 1 for second to third phase. End of phase 2 should go straight to WAITMEM
 					next_state = WAITMEM;
-				else
+				else // M ==2, when it completed the third phase
 					next_state = PREPWRT;
 			PREPWRT:
 				next_state = WRITEMSG;
