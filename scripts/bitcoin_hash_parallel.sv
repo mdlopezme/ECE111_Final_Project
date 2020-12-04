@@ -6,10 +6,17 @@ module bitcoin_hash(
 	output logic [31:0] mem_write_data,
 	input logic [31:0] mem_read_data
 );
+// Number of NONCES + one, cuz dont feel like reindexing
+	parameter NUM_NONCES = 15;
+// Make module
+	logic done1, start1;
+	logic [31:0] answers [0:NUM_NONCES];
+	logic [31:0] pass[0:2];
+	logic [31:0] h [0:7];
+	logic [31:0] A, B, C, D, E, F, G, H;
+	computer instcomp ( h, reset_n, clk, start1, done1, answers, pass  );
+	defparam instcomp.N = NUM_NONCES;
 
-// Number of NONCES
-	parameter int NUM_NONCES = 16;
-	parameter int NN = 2;
 // The clock domain for all modules will be shared
 	assign mem_clk = clk;
 
@@ -26,59 +33,47 @@ module bitcoin_hash(
 	};
 
 // LOCALPARAMETERS
-	localparam IDLE = 4'h0, READMEM = 4'h1, WAITMEM = 4'h2, COMPUTE1 = 4'h3, UPDATEH = 4'h6, WRITEMSG = 4'h7, PREPWRT = 4'h8;
+	localparam IDLE = 4'h0, READMEM = 4'h1, WAITMEM = 4'h2, COMPUTE1 = 4'h3, COMPUTE2 = 4'h4, PREPMOD = 4'h5, UPDATEH = 4'h6, PREPWRT = 4'h8, WRITEMSG = 4'h7;
 // REGISTERS
 	reg [3:0] present_state, next_state;
 // Internal Variables
-	logic [31:0] A [0:NUM_NONCES], B[0:NUM_NONCES], C[0:NUM_NONCES], D[0:NUM_NONCES], E[0:NUM_NONCES], 
-				 F[0:NUM_NONCES], G[0:NUM_NONCES], H[0:NUM_NONCES];
 	
-	logic [31:0] h [0:NUM_NONCES][0:7];
-	
-	logic [31:0] hphase1 [0:NUM_NONCES][0:7];
-	 
-	logic [31:0] w [0:NUM_NONCES][0:15];
-	logic [31:0] s0[0:NUM_NONCES], s1 [0:NUM_NONCES];
-	logic [31:0] maj[0:NUM_NONCES], ch[0:NUM_NONCES], tee1[0:NUM_NONCES], tee2[0:NUM_NONCES];
+	logic [31:0] w [0:15];
 // Counters
 	int memIndex, wordExpand;
-	logic [1:0] M;
-
+	logic M;
 // Main Logic
 	always_ff @(posedge clk) begin
 		case (present_state)
 			IDLE: begin
 				//$display("IDLING");
 				mem_we <= 0;
+				start1 <= 0;
 				mem_addr <= message_addr;
 				memIndex <= 0;
 				M <= 0;
 				wordExpand <= 1;
 				
-				for( int n = 0; n <= NUM_NONCES; n++) begin
-					h[n][0] <= 32'h6a09e667;
-					h[n][1] <= 32'hbb67ae85;
-					h[n][2] <= 32'h3c6ef372;
-					h[n][3] <= 32'ha54ff53a;
-					h[n][4] <= 32'h510e527f;
-					h[n][5] <= 32'h9b05688c;
-					h[n][6] <= 32'h1f83d9ab;
-					h[n][7] <= 32'h5be0cd19;
+				h[0] <= 32'h6a09e667;
+				h[1] <= 32'hbb67ae85;
+				h[2] <= 32'h3c6ef372;
+				h[3] <= 32'ha54ff53a;
+				h[4] <= 32'h510e527f;
+				h[5] <= 32'h9b05688c;
+				h[6] <= 32'h1f83d9ab;
+				h[7] <= 32'h5be0cd19;
 
-					A[n] <= 32'h6a09e667;
-					B[n] <= 32'hbb67ae85;
-					C[n] <= 32'h3c6ef372;
-					D[n] <= 32'ha54ff53a;
-					E[n] <= 32'h510e527f;
-					F[n] <= 32'h9b05688c;
-					G[n] <= 32'h1f83d9ab;
-					H[n] <= 32'h5be0cd19;
-				
-				end
+				A <= 32'h6a09e667;
+				B <= 32'hbb67ae85;
+				C <= 32'h3c6ef372;
+				D <= 32'ha54ff53a;
+				E <= 32'h510e527f;
+				F <= 32'h9b05688c;
+				G <= 32'h1f83d9ab;
+				H <= 32'h5be0cd19;
 			end
 			WAITMEM: begin
-			//$display("WAITMEM: msg_addr: %h, mem_we: %d", mem_addr,mem_we);
-				if( M == 0 )
+				if( ~M )
 					mem_addr <= message_addr + 16'd1;
 				else
 					mem_addr <= message_addr + 16'd17;
@@ -88,152 +83,76 @@ module bitcoin_hash(
 				
 			end
 			READMEM: begin
-				//$display("msg_addr: %h, M: %d, memIndex: %d, mem_read_data: %h,", mem_addr, M,memIndex, mem_read_data,);
+				//$display("msg_addr: %h, memIndex: %d, mem_read_data: %h", mem_addr, memIndex, mem_read_data );
 				memIndex <= memIndex + 1; // Increment the index
 				mem_addr <= mem_addr + 16'd1;
+				//$display("%d, %d, %h", memIndex, mem_addr, mem_read_data);
 				
-				for( int n = 0; n <= NUM_NONCES; n++ ) begin
-					if  (M==1 && memIndex == 3)  begin
-						w[n][3] <= n;
-						w[n][4] <= 32'h80000000;
-						w[n][5] <= 0;
-						w[n][6] <= 0;
-						w[n][7] <= 0;
-						w[n][8] <= 0;
-						w[n][9] <= 0;
-						w[n][10] <= 0;
-						w[n][11] <= 0;
-						w[n][12] <= 0;
-						w[n][13] <= 0;
-						w[n][14] <= 0;
-						w[n][15] <= 32'd640;
-						
-						h[n][0] <= hphase1[n][0];
-						h[n][1] <= hphase1[n][1];
-						h[n][2] <= hphase1[n][2];
-						h[n][3] <= hphase1[n][3];
-						h[n][4] <= hphase1[n][4];
-						h[n][5] <= hphase1[n][5];
-						h[n][6] <= hphase1[n][6];
-						h[n][7] <= hphase1[n][7];
-						
-						A[n] <= hphase1[n][0];  // Phase 2 should have the h's from phase 1
-						B[n] <= hphase1[n][1];
-						C[n] <= hphase1[n][2];
-						D[n] <= hphase1[n][3];
-						E[n] <= hphase1[n][4];
-						F[n] <= hphase1[n][5];
-						G[n] <= hphase1[n][6];
-						H[n] <= hphase1[n][7];
-					end else if( M==2) begin		
-						w[n][0] <= h[n][0];
-						w[n][1] <= h[n][1];
-						w[n][2] <= h[n][2];
-						w[n][3] <= h[n][3];
-						w[n][4] <= h[n][4];
-						w[n][5] <= h[n][5];
-						w[n][6] <= h[n][6];
-						w[n][7] <= h[n][7];
-						w[n][8] <=  32'h80000000;
-						w[n][9]  <= 0;
-						w[n][10] <= 0;
-						w[n][11] <= 0;
-						w[n][12] <= 0;
-						w[n][13] <= 0;
-						w[n][14] <= 0;
-						w[n][15] <= 32'd256;
-						
-						h[n][0] <= 32'h6a09e667;
-						h[n][1] <= 32'hbb67ae85;
-						h[n][2] <= 32'h3c6ef372;
-						h[n][3] <= 32'ha54ff53a;
-						h[n][4] <= 32'h510e527f;
-						h[n][5] <= 32'h9b05688c;
-						h[n][6] <= 32'h1f83d9ab;
-						h[n][7] <= 32'h5be0cd19;
-						
-						A[n] <= 32'h6a09e667;
-						B[n] <= 32'hbb67ae85;
-						C[n] <= 32'h3c6ef372;
-						D[n] <= 32'ha54ff53a;
-						E[n] <= 32'h510e527f;
-						F[n] <= 32'h9b05688c;
-						G[n] <= 32'h1f83d9ab;
-						H[n] <= 32'h5be0cd19;
-					end	else begin
-						w[n][memIndex] <= mem_read_data;
-					end
-				end
+				if  (M)
+					pass[memIndex] <= mem_read_data;
+				else
+					w[memIndex] <= mem_read_data;
+
+				
+			
 			end
-			
-			
-			
 			COMPUTE1: begin
-				for( int n = 0; n <= NUM_NONCES; n++) begin
-					if ( wordExpand > 15 && wordExpand < 64) begin
-						//$display("wordExpand[%2d]", wordExpand);
-						w[n][wordExpand%16] <= wordexpansion( w[n][(wordExpand-16)%16], w[n][(wordExpand-15)%16], 
-												w[n][(wordExpand-7)%16], w[n][(wordExpand-2)%16]);
-					end
-		
-					s0[n] = rightrotate(A[n],2) ^ rightrotate(A[n],13) ^ rightrotate(A[n],22);
-					s1[n] = rightrotate(E[n],6) ^ rightrotate(E[n],11) ^ rightrotate(E[n],25);
-
-					ch[n] = ( E[n] & F[n] ) ^ ( (~E[n]) & G[n] );
-					maj[n] = ( A[n] & B[n] ) ^ ( A[n] & C[n] ) ^ ( B[n] & C[n] );
-					
-					tee2[n] = s0[n] + maj[n];
-					tee1[n] = H[n] + s1[n] + ch[n] + k[wordExpand-1] + w[n][(wordExpand-1)%16];
-					
-					{ A[n], B[n], C[n], D[n], E[n], F[n], G[n], H[n] } = { tee1[n] + tee2[n], A[n], B[n], C[n], D[n] + tee1[n], E[n], F[n] ,G[n] };
+				//$display("Wordexpand round: %d", wordExpand);
+				if ( wordExpand > 15 && wordExpand < 64) begin
+					//$display("wordExpand[%2d]", wordExpand);
+					w[wordExpand%16] <= wordexpansion( w[(wordExpand-16)%16], w[(wordExpand-15)%16], w[(wordExpand-7)%16], w[(wordExpand-2)%16]);
 				end
-
 				
+				{ A, B, C, D, E, F, G, H } <= sha256_op( );
+					
 				wordExpand <= wordExpand + 1;
 				
 			end
 			UPDATEH: begin
-				//$display("updateH");
-				for( int n = 0; n <= NUM_NONCES; n++ ) begin
-					h[n][0] <= h[n][0]+A[n]; // ADD N
-					h[n][1] <= h[n][1]+B[n]; // ADD N
-					h[n][2] <= h[n][2]+C[n]; // ADD N
-					h[n][3] <= h[n][3]+D[n]; // ADD N
-					h[n][4] <= h[n][4]+E[n]; // ADD N
-					h[n][5] <= h[n][5]+F[n]; // ADD N
-					h[n][6] <= h[n][6]+G[n]; // ADD N
-					h[n][7] <= h[n][7]+H[n]; // ADD N
-					
-					if (M == 0) begin // Keep PHASE1 hash values in memory
-						hphase1[n][0] <= h[n][0]+A[n]; //ADD N
-						hphase1[n][1] <= h[n][1]+B[n]; //ADD N
-						hphase1[n][2] <= h[n][2]+C[n]; //ADD N
-						hphase1[n][3] <= h[n][3]+D[n]; //ADD N
-						hphase1[n][4] <= h[n][4]+E[n]; //ADD N
-						hphase1[n][5] <= h[n][5]+F[n]; //ADD N
-						hphase1[n][6] <= h[n][6]+G[n]; //ADD N
-						hphase1[n][7] <= h[n][7]+H[n]; //ADD N
-					end
-				end
+				//$display("updateH, h[0] = %h", h[0]+A);
+				h[0] <= h[0]+A;
+				h[1] <= h[1]+B;
+				h[2] <= h[2]+C;
+				h[3] <= h[3]+D;
+				h[4] <= h[4]+E;
+				h[5] <= h[5]+F;
+				h[6] <= h[6]+G;
+				h[7] <= h[7]+H;
 
-				M <= M + 1; // PREP MEM
+				M <= 1; // PREP MEM
 				memIndex <= 0; // PREP MEM
-				if(M < 2) // M =0: first to second phase, M = 1: second to third phase, M = 3: end of third phase
-					mem_addr <= message_addr + 16'd16; // PREP MEM 
-				else 
-				begin
+				if(~M )
+					mem_addr <= message_addr + 16'd16; // PREP MEM
+				else begin
 					mem_addr <= output_addr;
 					mem_we <= 1;
 				end
 			end
+			PREPMOD: begin
+				start1 <= 1;
+			end
+			COMPUTE2: begin
+				//$display("h{%h,%h,%h,%h,%h,%h,%h,%h}, pass{%h,%h,%h}", h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], pass[0], pass[1], pass[2] );
+				
+				
+				start1 <=0;
+				if(done1) begin
+					mem_we <= 1;
+					mem_addr <= output_addr;
+					memIndex <= 0;
+				end
+			end
 			PREPWRT: begin
-				mem_write_data <= h[memIndex][0]; // ADD N
+				$display("mem_we: %d, answer{%h,%h,%h}", mem_we, answers[0], answers[1], answers[2]);
+				mem_addr <= output_addr;
+				mem_write_data <= answers[memIndex];
 			end
 			WRITEMSG: begin
-				mem_addr <= output_addr + memIndex + 1;
-				mem_write_data <= h[memIndex+1][0]; // ADD N
+				//$display("Write message: output: %d, h0: %h", mem_addr, h[0]);
 				memIndex <= memIndex + 1;
-				if( memIndex == 15) begin
+				mem_addr <= mem_addr + 16'd1;
+				mem_write_data <= answers[memIndex+1];
+				if( memIndex == NUM_NONCES) begin
 					done <= 1;
 					mem_we <= 0;
 				end
@@ -252,8 +171,10 @@ module bitcoin_hash(
 			WAITMEM:
 				next_state = READMEM;
 			READMEM:
-				if( memIndex == 15 || (memIndex == 3 && M ==1 ) || (M ==2) ) 
+				if( memIndex == 15 )
 					next_state = COMPUTE1;
+				else if( memIndex == 2 && M )
+					next_state = PREPMOD;
 				else
 					next_state = READMEM;
 			COMPUTE1:
@@ -262,20 +183,24 @@ module bitcoin_hash(
 				else
 					next_state = COMPUTE1;
 			UPDATEH:
-				if( M < 2 ) // M= 0 for first to second phase, M = 1 for second to third phase. End of phase 2 should go straight to WAITMEM
-					next_state = WAITMEM;
-				else // M ==2, when it completed the third phase
+				next_state = WAITMEM;
+			PREPMOD:
+				next_state = COMPUTE2;
+			COMPUTE2:
+				if(done1)
 					next_state = PREPWRT;
+				else
+					next_state = COMPUTE2;
 			PREPWRT:
 				next_state = WRITEMSG;
 			WRITEMSG:
-				if( memIndex == 15 )
+				if( memIndex == NUM_NONCES )
 					next_state = IDLE;
 				else
 					next_state = WRITEMSG;
 		endcase
 	end
-	
+
 
 // Right Rotation
 function logic [31:0] rightrotate(input logic [31:0] x, input logic [7:0] r); begin
@@ -293,6 +218,23 @@ function logic [31:0] wordexpansion( input logic [31:0] x16, x15, x7, x2 );
 	end
 endfunction
 
+// Word Expansion
+function logic [255:0] sha256_op( );
+	begin
+	logic [31:0] s0, s1;
+	logic [31:0] maj, ch, tee1, tee2;
+		s0 = rightrotate(A,2) ^ rightrotate(A,13) ^ rightrotate(A,22);
+		s1 = rightrotate(E,6) ^ rightrotate(E,11) ^ rightrotate(E,25);
+      
+		ch = ( E & F ) ^ ( (~E) & G );
+		maj = ( A & B ) ^ ( A & C ) ^ ( B & C );
+		
+		tee2 = s0 + maj;
+		tee1 = H + s1 + ch + k[wordExpand-1] + w[(wordExpand-1)%16];
+		
+		sha256_op = { tee1 + tee2, A, B, C, D + tee1, E, F ,G };
+	end
+endfunction
 
 // State Register
 	always_ff @ (posedge clk, negedge reset_n) begin
