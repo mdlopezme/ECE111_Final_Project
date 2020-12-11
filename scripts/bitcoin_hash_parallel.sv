@@ -8,7 +8,7 @@ module bitcoin_hash(
 );
 
 // Number of NONCES
-	parameter int NUM_NONCES = 16;
+	parameter int NUM_NONCES = 15;
 	parameter int NN = 2;
 // The clock domain for all modules will be shared
 	assign mem_clk = clk;
@@ -34,12 +34,8 @@ module bitcoin_hash(
 				 F[0:NUM_NONCES], G[0:NUM_NONCES], H[0:NUM_NONCES];
 	
 	logic [31:0] h [0:NUM_NONCES][0:7];
-	
-	logic [31:0] hphase1 [0:NUM_NONCES][0:7];
-	 
 	logic [31:0] w [0:NUM_NONCES][0:15];
-	logic [31:0] s0[0:NUM_NONCES], s1 [0:NUM_NONCES];
-	logic [31:0] maj[0:NUM_NONCES], ch[0:NUM_NONCES], tee1[0:NUM_NONCES], tee2[0:NUM_NONCES];
+	logic [31:0] hphase1 [0:7];
 // Counters
 	int memIndex, wordExpand;
 	logic [1:0] M;
@@ -108,23 +104,23 @@ module bitcoin_hash(
 						w[n][14] <= 0;
 						w[n][15] <= 32'd640;
 						
-						h[n][0] <= hphase1[n][0];
-						h[n][1] <= hphase1[n][1];
-						h[n][2] <= hphase1[n][2];
-						h[n][3] <= hphase1[n][3];
-						h[n][4] <= hphase1[n][4];
-						h[n][5] <= hphase1[n][5];
-						h[n][6] <= hphase1[n][6];
-						h[n][7] <= hphase1[n][7];
+						h[n][0] <= hphase1[0];
+						h[n][1] <= hphase1[1];
+						h[n][2] <= hphase1[2];
+						h[n][3] <= hphase1[3];
+						h[n][4] <= hphase1[4];
+						h[n][5] <= hphase1[5];
+						h[n][6] <= hphase1[6];
+						h[n][7] <= hphase1[7];
 						
-						A[n] <= hphase1[n][0];  // Phase 2 should have the h's from phase 1
-						B[n] <= hphase1[n][1];
-						C[n] <= hphase1[n][2];
-						D[n] <= hphase1[n][3];
-						E[n] <= hphase1[n][4];
-						F[n] <= hphase1[n][5];
-						G[n] <= hphase1[n][6];
-						H[n] <= hphase1[n][7];
+						A[n] <= hphase1[0];  // Phase 2 should have the h's from phase 1
+						B[n] <= hphase1[1];
+						C[n] <= hphase1[2];
+						D[n] <= hphase1[3];
+						E[n] <= hphase1[4];
+						F[n] <= hphase1[5];
+						G[n] <= hphase1[6];
+						H[n] <= hphase1[7];
 					end else if( M==2) begin		
 						w[n][0] <= h[n][0];
 						w[n][1] <= h[n][1];
@@ -176,16 +172,7 @@ module bitcoin_hash(
 												w[n][(wordExpand-7)%16], w[n][(wordExpand-2)%16]);
 					end
 		
-					s0[n] = rightrotate(A[n],2) ^ rightrotate(A[n],13) ^ rightrotate(A[n],22);
-					s1[n] = rightrotate(E[n],6) ^ rightrotate(E[n],11) ^ rightrotate(E[n],25);
-
-					ch[n] = ( E[n] & F[n] ) ^ ( (~E[n]) & G[n] );
-					maj[n] = ( A[n] & B[n] ) ^ ( A[n] & C[n] ) ^ ( B[n] & C[n] );
-					
-					tee2[n] = s0[n] + maj[n];
-					tee1[n] = H[n] + s1[n] + ch[n] + k[wordExpand-1] + w[n][(wordExpand-1)%16];
-					
-					{ A[n], B[n], C[n], D[n], E[n], F[n], G[n], H[n] } = { tee1[n] + tee2[n], A[n], B[n], C[n], D[n] + tee1[n], E[n], F[n] ,G[n] };
+					{ A[n], B[n], C[n], D[n], E[n], F[n], G[n], H[n] } = sha256_op(n);
 				end
 
 				
@@ -203,17 +190,17 @@ module bitcoin_hash(
 					h[n][5] <= h[n][5]+F[n]; // ADD N
 					h[n][6] <= h[n][6]+G[n]; // ADD N
 					h[n][7] <= h[n][7]+H[n]; // ADD N
-					
-					if (M == 0) begin // Keep PHASE1 hash values in memory
-						hphase1[n][0] <= h[n][0]+A[n]; //ADD N
-						hphase1[n][1] <= h[n][1]+B[n]; //ADD N
-						hphase1[n][2] <= h[n][2]+C[n]; //ADD N
-						hphase1[n][3] <= h[n][3]+D[n]; //ADD N
-						hphase1[n][4] <= h[n][4]+E[n]; //ADD N
-						hphase1[n][5] <= h[n][5]+F[n]; //ADD N
-						hphase1[n][6] <= h[n][6]+G[n]; //ADD N
-						hphase1[n][7] <= h[n][7]+H[n]; //ADD N
-					end
+				end
+
+				if (M == 0) begin // Keep PHASE1 hash values in memory
+					hphase1[0] <= h[0][0]+A[0]; //ADD N
+					hphase1[1] <= h[0][1]+B[0]; //ADD N
+					hphase1[2] <= h[0][2]+C[0]; //ADD N
+					hphase1[3] <= h[0][3]+D[0]; //ADD N
+					hphase1[4] <= h[0][4]+E[0]; //ADD N
+					hphase1[5] <= h[0][5]+F[0]; //ADD N
+					hphase1[6] <= h[0][6]+G[0]; //ADD N
+					hphase1[7] <= h[0][7]+H[0]; //ADD N
 				end
 
 				M <= M + 1; // PREP MEM
@@ -293,6 +280,25 @@ function logic [31:0] wordexpansion( input logic [31:0] x16, x15, x7, x2 );
 	end
 endfunction
 
+// SHA256 OP
+function logic [0:255] sha256_op ( input int  n );
+	logic [31:0] s0, s1 ;
+	logic [31:0] maj, ch, tee1, tee2;
+	begin
+		s0 = rightrotate(A[n],2) ^ rightrotate(A[n],13) ^ rightrotate(A[n],22);
+		s1 = rightrotate(E[n],6) ^ rightrotate(E[n],11) ^ rightrotate(E[n],25);
+
+		ch = ( E[n] & F[n] ) ^ ( (~E[n]) & G[n] );
+		maj = ( A[n] & B[n] ) ^ ( A[n] & C[n] ) ^ ( B[n] & C[n] );
+		
+		tee2 = s0 + maj;
+		tee1 = H[n] + s1 + ch + k[wordExpand-1] + w[n][(wordExpand-1)%16];
+		
+		sha256_op = { tee1 + tee2, A[n], B[n], C[n], D[n] + tee1, E[n], F[n] ,G[n] };
+	end
+endfunction
+
+					
 
 // State Register
 	always_ff @ (posedge clk, negedge reset_n) begin
