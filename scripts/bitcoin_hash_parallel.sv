@@ -8,17 +8,6 @@ module bitcoin_hash(
 );
 // Number of NONCES + one, cuz dont feel like reindexing
 	parameter NUM_NONCES = 15;
-// Make module
-	logic done1, start1;
-	logic [31:0] answers [0:NUM_NONCES];
-	logic [31:0] pass[0:2];
-	logic [31:0] h [0:7];
-	logic [31:0] A, B, C, D, E, F, G, H;
-	computer instcomp ( h, reset_n, clk, start1, done1, answers, pass  );
-	defparam instcomp.N = NUM_NONCES;
-
-// The clock domain for all modules will be shared
-	assign mem_clk = clk;
 
 // SHA256 K constants
 	parameter int k[0:63] = '{
@@ -31,6 +20,18 @@ module bitcoin_hash(
 		32'h19a4c116,32'h1e376c08,32'h2748774c,32'h34b0bcb5,32'h391c0cb3,32'h4ed8aa4a,32'h5b9cca4f,32'h682e6ff3,
 		32'h748f82ee,32'h78a5636f,32'h84c87814,32'h8cc70208,32'h90befffa,32'ha4506ceb,32'hbef9a3f7,32'hc67178f2
 	};
+
+// Make module
+	logic done1, start1;
+	logic [31:0] answers [0:NUM_NONCES];
+	logic [31:0] pass[0:2];
+	logic [31:0] h [0:7];
+	logic [31:0] A, B, C, D, E, F, G, H;
+	computer instcomp ( h, reset_n, clk, start1, done1, answers, pass  );
+	defparam instcomp.N = NUM_NONCES;
+
+// The clock domain for all modules will be shared
+	assign mem_clk = clk;
 
 // LOCALPARAMETERS
 	localparam IDLE = 4'h0, READMEM = 4'h1, WAITMEM = 4'h2, COMPUTE1 = 4'h3, COMPUTE2 = 4'h4, PREPMOD = 4'h5, UPDATEH = 4'h6, PREPWRT = 4'h8, WRITEMSG = 4'h7;
@@ -143,7 +144,7 @@ module bitcoin_hash(
 				end
 			end
 			PREPWRT: begin
-				$display("mem_we: %d, answer{%h,%h,%h}", mem_we, answers[0], answers[1], answers[2]);
+				//$display("mem_we: %d, answer{%h,%h,%h}", mem_we, answers[0], answers[1], answers[2]);
 				mem_addr <= output_addr;
 				mem_write_data <= answers[memIndex];
 			end
@@ -218,7 +219,7 @@ function logic [31:0] wordexpansion( input logic [31:0] x16, x15, x7, x2 );
 	end
 endfunction
 
-// Word Expansion
+// Sha256 Operation
 function logic [255:0] sha256_op( );
 	begin
 	logic [31:0] s0, s1;

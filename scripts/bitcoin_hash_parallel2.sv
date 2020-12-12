@@ -20,135 +20,141 @@ parameter int k[0:63] = '{
     32'h748f82ee,32'h78a5636f,32'h84c87814,32'h8cc70208,32'h90befffa,32'ha4506ceb,32'hbef9a3f7,32'hc67178f2
 };
 // LOCALPARAMETERS
-	localparam IDLE = 4'h0, SETW = 4'h1, COMPUTE1 = 4'h2, UPDATEH = 4'h3, SET = 4'h9;
+    localparam IDLE = 4'h0, SETW = 4'h1, COMPUTE1 = 4'h2, UPDATEH = 4'h3, SET = 4'h9;
+    //localparam int t = 5;
 // REGISTERS
 	reg [3:0] present_state, next_state;
 // Internal Variables
-logic [31:0] w [0:N][0:15];
+logic [31:0] w [0:15][0:N];
 logic  [31:0] A[0:N], B[0:N], C[0:N], D[0:N], E[0:N], F[0:N], G[0:N], H[0:N];
-logic [31:0] h [0:N][0:7];
+logic [31:0] h [0:7][0:N];
 int wordExpand;
 logic M;
 
-// Main Generator Logic
-genvar i;
-generate
-    for(i=0; i <= N; i++) begin : hasher
-        always_ff @(posedge clk) begin
-            case(present_state)
-                IDLE: begin
-                    //$display("N=%d", N);
-                    h[i][0] <= hh[0];
-                    h[i][1] <= hh[1];
-                    h[i][2] <= hh[2];
-                    h[i][3] <= hh[3];
-                    h[i][4] <= hh[4];
-                    h[i][5] <= hh[5];
-                    h[i][6] <= hh[6];
-                    h[i][7] <= hh[7];
-
-                    A[i] <= hh[0];
-                    B[i] <= hh[1];
-                    C[i] <= hh[2];
-                    D[i] <= hh[3];
-                    E[i] <= hh[4];
-                    F[i] <= hh[5];
-                    G[i] <= hh[6];
-                    H[i] <= hh[7];
-                end
-                SETW: begin
-                    //$display("SETW: A[0] = %h", A[0]);
-                    if(M) begin
-                        h[i][0] <= 32'h6a09e667;
-                        h[i][1] <= 32'hbb67ae85;
-                        h[i][2] <= 32'h3c6ef372;
-                        h[i][3] <= 32'ha54ff53a;
-                        h[i][4] <= 32'h510e527f;
-                        h[i][5] <= 32'h9b05688c;
-                        h[i][6] <= 32'h1f83d9ab;
-                        h[i][7] <= 32'h5be0cd19;
-                        
-                        w[i][0] <= h[0][0] + A[0];
-                        w[i][1] <= h[0][1] + B[0];
-                        w[i][2] <= h[0][2] + C[0];
-                        w[i][3] <= h[0][3] + D[0];
-                        w[i][4] <= h[0][4] + E[0];
-                        w[i][5] <= h[0][5] + F[0];
-                        w[i][6] <= h[0][6] + G[0];
-                        w[i][7] <= h[0][7] + H[0];
-                        w[i][8] <= 32'h80000000;
-                        w[i][9] <= 0;
-                        w[i][10] <=0;
-                        w[i][11] <=0;
-                        w[i][12] <=0;
-                        w[i][13] <=0;
-                        w[i][14] <=0;
-                        w[i][15] <= 32'd256;
-
-                        A[i] <= 32'h6a09e667;
-						B[i] <= 32'hbb67ae85;
-						C[i] <= 32'h3c6ef372;
-						D[i] <= 32'ha54ff53a;
-						E[i] <= 32'h510e527f;
-						F[i] <= 32'h9b05688c;
-						G[i] <= 32'h1f83d9ab;
-						H[i] <= 32'h5be0cd19;
-                    end else begin
-                        w[i][0] <= pass[0];
-                        w[i][1] <= pass[1];
-                        w[i][2] <= pass[2];
-                        w[i][3] <= i; // Nonce Counter
-                        w[i][4] <= 32'h80000000;
-                        w[i][5] <= 0;
-                        w[i][6] <= 0;
-                        w[i][7] <= 0;
-                        w[i][8] <= 0;
-                        w[i][9] <= 0;
-                        w[i][10] <= 0;
-                        w[i][11] <= 0;
-                        w[i][12] <= 0;
-                        w[i][13] <= 0;
-                        w[i][14] <= 0;
-                        w[i][15] <= 32'd640;
-                    end
-                end
-                COMPUTE1: begin
-                    if ( wordExpand > 15 && wordExpand < 64) begin
-						w[i][wordExpand%16] <= wordexpansion( w[i][(wordExpand-16)%16], w[i][(wordExpand-15)%16], w[i][(wordExpand-7)%16], w[i][(wordExpand-2)%16]);
-					end
-                    { A[i], B[i], C[i], D[i], E[i], F[i], G[i], H[i] } <= sha256_op( i );
-                    
-                end
-                SET: begin
-                    answer[i] <= h[i][0]+A[i];
-                end
-            endcase
-        end
-    end
-endgenerate
-
 // Main Logic
-    always_ff @(posedge clk) begin
+    always_ff @ (posedge clk) begin
         case(present_state)
             IDLE: begin
                 M <= 0;
             end
             SETW: begin
                 wordExpand <= 1;
-                if(wordExpand > 63) begin
-                    M <= 1;
-                end
-            end
-            SET: begin
-                done <= 1;
             end
             COMPUTE1: begin
                 wordExpand <= wordExpand + 1;
+                
+                if(wordExpand > 63)
+                    M <= 1;
+            end
+            SET: begin
+                //$display("M[2]: h[0]: %h",  h[0][t]+A[t]);
+                //answer[0] <= h[0][0]+A[t];
+                done <= 1;
             end
         endcase
-
-        
     end
+
+// Main Generator Logic
+genvar t;
+generate
+    for( t = 0; t <= N; t++) begin : hasher
+        always_ff @(posedge clk) begin
+            case(present_state)
+                IDLE: begin
+                    //$display("N=%d", N);
+                    h[0][t] <= hh[0];
+                    h[1][t] <= hh[1];
+                    h[2][t] <= hh[2];
+                    h[3][t] <= hh[3];
+                    h[4][t] <= hh[4];
+                    h[5][t] <= hh[5];
+                    h[6][t] <= hh[6];
+                    h[7][t] <= hh[7];
+
+                    A[t] <= hh[0];
+                    B[t] <= hh[1];
+                    C[t] <= hh[2];
+                    D[t] <= hh[3];
+                    E[t] <= hh[4];
+                    F[t] <= hh[5];
+                    G[t] <= hh[6];
+                    H[t] <= hh[7];
+                end
+                SETW: begin
+                    //$display("SETW: A[0] = %h", A[0]);
+                    if(~M)  begin
+                        $display("M[0]: h[0]: %h",  hh[0]);
+                        w[0][t] <= pass[0];
+                        w[1][t] <= pass[1];
+                        w[2][t] <= pass[2];
+                        w[3][t] <= t; // Nonce Counter
+                        w[4][t] <= 32'h80000000;
+                        w[5][t] <= 0;
+                        w[6][t] <= 0;
+                        w[7][t] <= 0;
+                        w[8][t] <= 0;
+                        w[9][t] <= 0;
+                        w[10][t] <= 0;
+                        w[11][t] <= 0;
+                        w[12][t] <= 0;
+                        w[13][t] <= 0;
+                        w[14][t] <= 0;
+                        w[15][t] <= 32'd640;
+                    end else begin
+                        $display("M[1]: h[0]: %h",  h[0][t]+A[t]);
+                        w[0][t] <= h[0][t] + A[t];
+                        w[1][t] <= h[1][t] + B[t];
+                        w[2][t] <= h[2][t] + C[t];
+                        w[3][t] <= h[3][t] + D[t];
+                        w[4][t] <= h[4][t] + E[t];
+                        w[5][t] <= h[5][t] + F[t];
+                        w[6][t] <= h[6][t] + G[t];
+                        w[7][t] <= h[7][t] + H[t];
+                        w[8][t] <= 32'h80000000;
+                        w[9][t] <= 0;
+                        w[10][t] <= 0;
+                        w[11][t] <= 0;
+                        w[12][t] <= 0;
+                        w[13][t] <= 0;
+                        w[14][t] <= 0;
+                        w[15][t] <= 32'd256;
+
+                        h[0][t] <= 32'h6a09e667;
+                        h[1][t] <= 32'hbb67ae85;
+                        h[2][t] <= 32'h3c6ef372;
+                        h[3][t] <= 32'ha54ff53a;
+                        h[4][t] <= 32'h510e527f;
+                        h[5][t] <= 32'h9b05688c;
+                        h[6][t] <= 32'h1f83d9ab;
+                        h[7][t] <= 32'h5be0cd19;
+
+                        A[t] <= 32'h6a09e667;
+                        B[t] <= 32'hbb67ae85;
+                        C[t] <= 32'h3c6ef372;
+                        D[t] <= 32'ha54ff53a;
+                        E[t] <= 32'h510e527f;
+                        F[t] <= 32'h9b05688c;
+                        G[t] <= 32'h1f83d9ab;
+                        H[t] <= 32'h5be0cd19;
+                    end
+                end
+                COMPUTE1: begin
+                    if ( wordExpand > 15 && wordExpand < 64) begin
+                        //$display("wordExpand[%2d]", wordExpand);
+                        w[wordExpand%16][t] <= wordexpansion( w[(wordExpand-16)%16][t], w[(wordExpand-15)%16][t], w[(wordExpand-7)%16][t], w[(wordExpand-2)%16][t]);
+                    end
+                    
+                    { A[t], B[t], C[t], D[t], E[t], F[t], G[t], H[t] } <= sha256_op( t );
+                    
+                end
+                SET: begin
+                    //$display("M[2]: h[0]: %h",  h[0][t]+A[t]);
+                    answer[t] <= h[0][t]+A[t];
+                end
+            endcase
+        end
+    end
+endgenerate
 
 // Next State Logic
 	always_comb begin
@@ -161,22 +167,23 @@ endgenerate
             SETW:
                 next_state = COMPUTE1;
             COMPUTE1:
-                if( wordExpand == 64 && ~M)
+                if( wordExpand == 64 & ~M )
                     next_state = SETW;
-                else if( wordExpand == 64 && M)
+                else if( wordExpand == 64 & M )
                     next_state = SET;
 				else
-					next_state = COMPUTE1;
+                    next_state = COMPUTE1;
             SET:
                 next_state = IDLE;
         endcase
     end
 
 // Right Rotation
-function logic [31:0] rightrotate(input logic [31:0] x, input logic [7:0] r); begin
+    function logic [31:0] rightrotate(input logic [31:0] x, input logic [7:0] r); begin
 		rightrotate = (x >> r) | (x << (32-r));
 	end
 endfunction
+
 // Word Expansion
 function logic [31:0] wordexpansion( input logic [31:0] x16, x15, x7, x2 );
 	begin
@@ -186,24 +193,25 @@ function logic [31:0] wordexpansion( input logic [31:0] x16, x15, x7, x2 );
       wordexpansion = x16 + s0 + x7 + s1;
 	end
 endfunction
-// Sha256 operation
-function logic [255:0] sha256_op( input int t );
+
+// Sha256 Operation
+function logic [255:0] sha256_op( input int n);
 	begin
 	logic [31:0] s0, s1;
 	logic [31:0] maj, ch, tee1, tee2;
-		s0 = rightrotate(A[t],2) ^ rightrotate(A[t],13) ^ rightrotate(A[t],22);
-		s1 = rightrotate(E[t],6) ^ rightrotate(E[t],11) ^ rightrotate(E[t],25);
+		s0 = rightrotate(A[n],2) ^ rightrotate(A[n],13) ^ rightrotate(A[n],22);
+		s1 = rightrotate(E[n],6) ^ rightrotate(E[n],11) ^ rightrotate(E[n],25);
       
-		ch = ( E[t] & F[t] ) ^ ( (~E[t]) & G[t] );
-		maj = ( A[t] & B[t] ) ^ ( A[t] & C[t] ) ^ ( B[t] & C[t] );
+		ch = ( E[n] & F[n] ) ^ ( (~E[n]) & G[n] );
+		maj = ( A[n] & B[n] ) ^ ( A[n] & C[n] ) ^ ( B[n] & C[n] );
 		
 		tee2 = s0 + maj;
-        tee1 = H[t] + s1 + ch + k[wordExpand-1] + w[t][(wordExpand-1)%16];
-        $display("A[%d]=%h | %h", wordExpand-1, tee1+tee2, w[t][(wordExpand-1)%16]);
+		tee1 = H[n] + s1 + ch + k[wordExpand-1] + w[(wordExpand-1)%16][n];
 		
-		sha256_op = { tee1 + tee2, A[t], B[t], C[t], D[t] + tee1, E[t], F[t] ,G[t] };
+		sha256_op = { tee1 + tee2, A[n], B[n], C[n], D[n] + tee1, E[n], F[n] ,G[n] };
 	end
 endfunction
+
 // State Register
 	always_ff @ (posedge clk, negedge reset_n) begin
 		if( !reset_n )
