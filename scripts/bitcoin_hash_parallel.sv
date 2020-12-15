@@ -34,7 +34,7 @@ localparam IDLE = 4'h0, PHASE0 = 4'h1, PREPHASE1 = 4'h2, PHASE1 = 4'h3, PREPHASE
 // REGISTERS
 reg [3:0] present_state, next_state;
 
-// Counters
+// Counter
     int memIndex;
     logic [0:1] M;
 
@@ -70,20 +70,21 @@ reg [3:0] present_state, next_state;
 				h[5][0] <= 32'h9b05688c;
 				h[6][0] <= 32'h1f83d9ab;
 				h[7][0] <= 32'h5be0cd19;
+
+                
             end
             PHASE0: begin // Moves all the data into a w variable
                 M <= 0;
                 mem_addr <= mem_addr + 16'd1;
+                w[15][0] <= mem_read_data;
                 done <= 0;
+
+                for(int i = 0; i < 15; i++) w[i][0] <= w[i+1][0];
                 memIndex <= memIndex + 1;
                 computeCycle <= 15;
 
-                w[15][0] <= mem_read_data; // get w[15] from memory
-
-                if( memIndex > 1 )  // calculate new A-H
+                if( memIndex > 1 )
                     { A[0], B[0], C[0], D[0], E[0], F[0], G[0], H[0] } <= sha256_op( 0, memIndex-2 );
-                
-                for(int i = 0; i < 15; i++) w[i][0] <= w[i+1][0]; // Rotate w
             end
             PREPHASE1: begin
                 memIndex <= 0;
@@ -114,7 +115,9 @@ reg [3:0] present_state, next_state;
                 M <= 1; // NOT NEEDED
                 mem_addr <= mem_addr + 16'd1;
                 memIndex <= memIndex + 1;
-                computeCycle <= 15;   
+                computeCycle <= 15;  
+
+                
                 
                 for( int t = 0; t <= N; t++) begin
                     if( memIndex <= 3 )
@@ -133,6 +136,7 @@ reg [3:0] present_state, next_state;
 
                     for(int i = 0; i < 15; i++) w[i][t] <= w[i+1][t]; // Rotate w
                 end
+
             end
             PREPHASE2: begin
                 memIndex <= 0;
@@ -158,9 +162,15 @@ reg [3:0] present_state, next_state;
                     G[k] <= 32'h1f83d9ab;
                     H[k] <= 32'h5be0cd19;
 
-                    // Save h values from phase2, becuase we need to use them later
-                    for( int t = 0; t <= 7; t++)
-                        hphase2[t][k] <= h[t][k] + A[k];
+                    // save the h because will need them later in phase 3
+                    hphase2[0][k] <= h[0][k] + A[k];
+                    hphase2[1][k] <= h[1][k] + B[k];
+                    hphase2[2][k] <= h[2][k] + C[k];
+                    hphase2[3][k] <= h[3][k] + D[k];
+                    hphase2[4][k] <= h[4][k] + E[k];
+                    hphase2[5][k] <= h[5][k] + F[k];
+                    hphase2[6][k] <= h[6][k] + G[k];
+                    hphase2[7][k] <= h[7][k] + H[k];
                 end
             end
 
@@ -178,16 +188,16 @@ reg [3:0] present_state, next_state;
                     else
                         w[15][t] <= 0;
 
-                    for(int i = 0; i < 15; i++) w[i][t] <= w[i+1][t]; // Rotate w
+                    for(int i = 0; i < 15; i++) w[i][t] <= w[i+1][t];
 
-                    if( memIndex > 1 ) 
+                    if( memIndex > 1 )
                         { A[t], B[t], C[t], D[t], E[t], F[t], G[t], H[t] } <= sha256_op( t, memIndex-2 );
                 end                   
+
             end
 
-            COMPUTE: begin // Could this be optimized further?
-                computeCycle <= computeCycle + 1;
-
+            COMPUTE: begin // NEEDS MAjor optimization
+                
                 for( int t = 0; t <= N; t++ ) begin
                     for(int i = 0; i < 15; i++)begin
                         w[i][t] <= w[i+1][t];
@@ -197,6 +207,8 @@ reg [3:0] present_state, next_state;
             
                     { A[t], B[t], C[t], D[t], E[t], F[t], G[t], H[t] } <= sha256_op( t, computeCycle ); // Do a sha256 operation
                 end
+
+                computeCycle <= computeCycle + 1;
             end
             PREPWRITE: begin
                 mem_we <= 1;
@@ -210,7 +222,7 @@ reg [3:0] present_state, next_state;
             end
             END: begin
                 done <= 1;
-                mem_we <= 0;
+                mem_we <= 0;      
             end
         endcase
     end
@@ -244,7 +256,7 @@ function logic [255:0] sha256_op( input int n, p);
 		
 		tee2 = s0 + maj;
         tee1 = H[n] + s1 + ch + k[p] + w[15][n];
-    
+        
 		sha256_op = { tee1 + tee2, A[n], B[n], C[n], D[n] + tee1, E[n], F[n] ,G[n] };
 	end
 endfunction
