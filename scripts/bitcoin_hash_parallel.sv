@@ -34,7 +34,7 @@ localparam IDLE = 4'h0, PHASE0 = 4'h1, PREPHASE1 = 4'h2, PHASE1 = 4'h3, PREPHASE
 // REGISTERS
 reg [3:0] present_state, next_state;
 
-// Counter
+// Counters
     int memIndex;
     logic [0:1] M;
 
@@ -42,7 +42,8 @@ reg [3:0] present_state, next_state;
     logic  [31:0] A[0:N], B[0:N], C[0:N], D[0:N], E[0:N], F[0:N], G[0:N], H[0:N];
     logic [31:0] h [0:7][0:N];
     logic [31:0] hphase2 [0:7][0:N];
-// Internal Variables
+
+    // Internal Variables
     int computeCycle;
 
 // Main Logic
@@ -71,23 +72,20 @@ reg [3:0] present_state, next_state;
 				h[6][0] <= 32'h1f83d9ab;
 				h[7][0] <= 32'h5be0cd19;
 
-                
             end
             PHASE0: begin // Moves all the data into a w variable
                 M <= 0;
                 mem_addr <= mem_addr + 16'd1;
-                w[15][0] <= mem_read_data;
                 done <= 0;
-
-                for(int i = 0; i < 15; i++) w[i][0] <= w[i+1][0];
                 memIndex <= memIndex + 1;
                 computeCycle <= 15;
 
-                if( memIndex > 1 ) begin
+                w[15][0] <= mem_read_data; // get w[15] from memory
+
+                if( memIndex > 1 )  // calculate new A-H
                     { A[0], B[0], C[0], D[0], E[0], F[0], G[0], H[0] } <= sha256_op( 0, memIndex-2 );
-                    //$display("A[%d]: %h", computeCycle-1, A[0]);
-                end
-                //$display("Read: %h, memIndex: %d", mem_read_data, memIndex);
+                
+                for(int i = 0; i < 15; i++) w[i][0] <= w[i+1][0]; // Rotate w
             end
             PREPHASE1: begin
                 memIndex <= 0;
@@ -118,9 +116,7 @@ reg [3:0] present_state, next_state;
                 M <= 1; // NOT NEEDED
                 mem_addr <= mem_addr + 16'd1;
                 memIndex <= memIndex + 1;
-                computeCycle <= 15;  
-
-                
+                computeCycle <= 15;   
                 
                 for( int t = 0; t <= N; t++) begin
                     if( memIndex <= 3 )
@@ -134,20 +130,16 @@ reg [3:0] present_state, next_state;
                     else
                         w[15][t] <= 0;
 
-                    if( memIndex > 1 ) begin
+                    if( memIndex > 1 )
                         { A[t], B[t], C[t], D[t], E[t], F[t], G[t], H[t] } <= sha256_op( t, memIndex-2 );
-                        //$display("A[%d]: %h", computeCycle-1, A[0]);
-                    end
 
                     for(int i = 0; i < 15; i++) w[i][t] <= w[i+1][t]; // Rotate w
                 end
-
             end
             PREPHASE2: begin
                 memIndex <= 0;
                 mem_addr <= message_addr + 12'd16;
                 M <= 2; 
-                //$display("H[0]: %h", h[0][0] + A[0]);
 
                 for( int k = 0; k <= N; k++) begin
                     h[0][k] <= 32'h6a09e667; // updateH
@@ -168,20 +160,13 @@ reg [3:0] present_state, next_state;
                     G[k] <= 32'h1f83d9ab;
                     H[k] <= 32'h5be0cd19;
 
-                    // COULD BE ASSIGNED BY SHIFTING
-                    hphase2[0][k] <= h[0][k] + A[k];
-                    hphase2[1][k] <= h[1][k] + B[k];
-                    hphase2[2][k] <= h[2][k] + C[k];
-                    hphase2[3][k] <= h[3][k] + D[k];
-                    hphase2[4][k] <= h[4][k] + E[k];
-                    hphase2[5][k] <= h[5][k] + F[k];
-                    hphase2[6][k] <= h[6][k] + G[k];
-                    hphase2[7][k] <= h[7][k] + H[k];
+                    // Save h values from phase2, becuase we need to use them later
+                    for( int t = 0; t <= 7; t++)
+                        hphase2[t][k] <= h[t][k] + A[k];
                 end
             end
 
             PHASE2: begin
-                //$display("H[0]: %h", hphase2[memIndex][0]);
                 memIndex <= memIndex + 1;
                 computeCycle <= 15;
 
@@ -195,21 +180,16 @@ reg [3:0] present_state, next_state;
                     else
                         w[15][t] <= 0;
 
-                    for(int i = 0; i < 15; i++) w[i][t] <= w[i+1][t];
+                    for(int i = 0; i < 15; i++) w[i][t] <= w[i+1][t]; // Rotate w
 
-                    if( memIndex > 1 ) begin
+                    if( memIndex > 1 ) 
                         { A[t], B[t], C[t], D[t], E[t], F[t], G[t], H[t] } <= sha256_op( t, memIndex-2 );
-                        //$display("A[%d]: %h", computeCycle-1, A[0]);
-                    end
                 end                   
-
             end
 
-            COMPUTE: begin // NEEDS MAjor optimization
-                //$display("w[%d]: %h", computeCycle-1, w[15][0]);
-                
-            
-                
+            COMPUTE: begin // Could this be optimized further?
+                computeCycle <= computeCycle + 1;
+
                 for( int t = 0; t <= N; t++ ) begin
                     for(int i = 0; i < 15; i++)begin
                         w[i][t] <= w[i+1][t];
@@ -219,19 +199,11 @@ reg [3:0] present_state, next_state;
             
                     { A[t], B[t], C[t], D[t], E[t], F[t], G[t], H[t] } <= sha256_op( t, computeCycle ); // Do a sha256 operation
                 end
-
-                computeCycle <= computeCycle + 1;
             end
             PREPWRITE: begin
                 mem_we <= 1;
                 mem_addr <= output_addr-16'd1; // Why minus 1? I have no idea
                 memIndex <= 0;
-
-                // for( int t = 0; t <= N; t++) begin
-                //     for( int j = 0; j <= 15; j++) begin
-                //         $display("w[%t][%d]: %h ",j, t, w[j][t]);
-                //     end
-                // end
             end
             WRITEMSG: begin
                 mem_addr <= mem_addr + 16'd1;
@@ -239,16 +211,8 @@ reg [3:0] present_state, next_state;
                 memIndex <= memIndex + 1;
             end
             END: begin
-                //for(int i = 0; i <= 7; i++) $display("h[%d]: %h", i, h[i][0]);
                 done <= 1;
                 mem_we <= 0;
-
-                // for( int b = 0; b <= N; b++ ) begin
-                //     for(int j = 0; j <= 15; j++) 
-                //         $display("w[%d][%d]: %h ",j, b, w[j][b]);
-                //     $display("------------");
-                // end
-                
             end
         endcase
     end
@@ -265,10 +229,6 @@ function logic [31:0] newWt(input int n);
 	logic [31:0] s0, s1;
 		s0 = rightrotate(w[1][n], 7) ^ rightrotate(w[1][n], 18) ^ (w[1][n] >> 3);
         s1 = rightrotate(w[14][n], 17) ^ rightrotate(w[14][n], 19) ^ (w[14][n] >> 10);
-        // if(M== 1 && n == 1)begin
-        //     //$display("W[%d]: %h", n, w[1][n] );
-        //     //$display("A[%d]: %h --> A[%d]: %h", p, A[n], p, tee1 + tee2 );
-        // end
         newWt = w[0][n] + s0 + w[9][n] + s1;
 	end
 endfunction
@@ -286,13 +246,7 @@ function logic [255:0] sha256_op( input int n, p);
 		
 		tee2 = s0 + maj;
         tee1 = H[n] + s1 + ch + k[p] + w[15][n];
-
-        if(M== 1 && n == 1)begin
-            //$display("%d: W[%d]: %h", n, p, w[15][n] );
-            //$display("A[%d]: %h --> A[%d]: %h", p, A[n], p, tee1 + tee2 );
-        end
-        
-		
+    
 		sha256_op = { tee1 + tee2, A[n], B[n], C[n], D[n] + tee1, E[n], F[n] ,G[n] };
 	end
 endfunction
