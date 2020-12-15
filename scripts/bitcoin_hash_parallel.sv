@@ -42,8 +42,7 @@ reg [3:0] present_state, next_state;
     logic  [31:0] A[0:N], B[0:N], C[0:N], D[0:N], E[0:N], F[0:N], G[0:N], H[0:N];
     logic [31:0] h [0:7][0:N];
     logic [31:0] hphase2 [0:7][0:N];
-
-    // Internal Variables
+// Internal Variables
     int computeCycle;
 
 // Main Logic
@@ -71,7 +70,6 @@ reg [3:0] present_state, next_state;
 				h[5][0] <= 32'h9b05688c;
 				h[6][0] <= 32'h1f83d9ab;
 				h[7][0] <= 32'h5be0cd19;
-
             end
             PHASE0: begin // Moves all the data into a w variable
                 M <= 0;
