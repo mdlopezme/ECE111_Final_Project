@@ -39,8 +39,8 @@ reg [3:0] present_state, next_state;
     logic [0:1] M;
 
 // Internal Variables : Depends on N
-    logic  [31:0] A[0:N], B[0:N], C[0:N], D[0:N], E[0:N], F[0:N], G[0:N], H[0:N];
-    logic [31:0] h [0:7][0:N];
+    logic  [31:0] A[0:N], B[0:N], C[0:N], D[0:N], E[0:N], F[0:N], G[0:N], H[0:N],precomp[0:N];
+    logic [31:0] h [0:7];
     logic [31:0] hphase2 [0:7][0:N];
 // Internal Variables
     int computeCycle;
@@ -62,14 +62,14 @@ reg [3:0] present_state, next_state;
                 G[0] <= 32'h1f83d9ab;
                 H[0] <= 32'h5be0cd19;
 
-                h[0][0] <= 32'h6a09e667;
-				h[1][0] <= 32'hbb67ae85;
-				h[2][0] <= 32'h3c6ef372;
-				h[3][0] <= 32'ha54ff53a;
-				h[4][0] <= 32'h510e527f;
-				h[5][0] <= 32'h9b05688c;
-				h[6][0] <= 32'h1f83d9ab;
-				h[7][0] <= 32'h5be0cd19;
+                h[0] <= 32'h6a09e667;
+				h[1] <= 32'hbb67ae85;
+				h[2] <= 32'h3c6ef372;
+				h[3] <= 32'ha54ff53a;
+				h[4] <= 32'h510e527f;
+				h[5] <= 32'h9b05688c;
+				h[6] <= 32'h1f83d9ab;
+				h[7] <= 32'h5be0cd19;
 
                 
             end
@@ -82,9 +82,15 @@ reg [3:0] present_state, next_state;
                 for(int i = 0; i < 15; i++) w[i][0] <= w[i+1][0];
                 memIndex <= memIndex + 1;
                 computeCycle <= 15;
+				
+					if (memIndex == 1) 
+					precomp[0] <= H[0] + k[memIndex-1];
+
+				if (memIndex > 1 ) 
+					precomp[0] <= G[0] + k[memIndex-1];
 
                 if( memIndex > 1 ) begin
-                    { A[0], B[0], C[0], D[0], E[0], F[0], G[0], H[0] } <= sha256_op( 0, memIndex-2 );
+                    { A[0], B[0], C[0], D[0], E[0], F[0], G[0], H[0] } <= sha256_op( 0, memIndex-2,precomp[0] );
                     //$display("A[%d]: %h", computeCycle-1, A[0]);
                 end
                 //$display("Read: %h, memIndex: %d", mem_read_data, memIndex);
@@ -95,23 +101,23 @@ reg [3:0] present_state, next_state;
                 M <= 1;
 
                 for( int k = 0; k <= N; k++) begin
-                    h[0][k] <= h[0][0] + A[0];  // updateH
-                    h[1][k] <= h[1][0] + B[0];
-                    h[2][k] <= h[2][0] + C[0];
-                    h[3][k] <= h[3][0] + D[0];
-                    h[4][k] <= h[4][0] + E[0];
-                    h[5][k] <= h[5][0] + F[0];
-                    h[6][k] <= h[6][0] + G[0];
-                    h[7][k] <= h[7][0] + H[0];
+                    h[0] <= h[0] + A[0];  // updateH
+                    h[1] <= h[1] + B[0];
+                    h[2] <= h[2] + C[0];
+                    h[3] <= h[3] + D[0];
+                    h[4] <= h[4] + E[0];
+                    h[5] <= h[5] + F[0];
+                    h[6] <= h[6] + G[0];
+                    h[7] <= h[7] + H[0];
 
-                    A[k] <= h[0][0] + A[0]; // Update ABCD...
-                    B[k] <= h[1][0] + B[0];
-                    C[k] <= h[2][0] + C[0];
-                    D[k] <= h[3][0] + D[0];
-                    E[k] <= h[4][0] + E[0];
-                    F[k] <= h[5][0] + F[0];
-                    G[k] <= h[6][0] + G[0];
-                    H[k] <= h[7][0] + H[0];
+                    A[k] <= h[0] + A[0]; // Update ABCD...
+                    B[k] <= h[1] + B[0];
+                    C[k] <= h[2] + C[0];
+                    D[k] <= h[3] + D[0];
+                    E[k] <= h[4] + E[0];
+                    F[k] <= h[5] + F[0];
+                    G[k] <= h[6] + G[0];
+                    H[k] <= h[7] + H[0];
                 end
             end
             PHASE1: begin
@@ -123,6 +129,12 @@ reg [3:0] present_state, next_state;
                 
                 
                 for( int t = 0; t <= N; t++) begin
+				if (memIndex == 1) 
+					precomp[t] <= H[t] + k[memIndex-1];
+
+				if (memIndex > 1 ) 
+					precomp[t] <= G[t] + k[memIndex-1];
+					
                     if( memIndex <= 3 )
                         w[15][t] <= mem_read_data;
                     else if( memIndex == 4)
@@ -135,7 +147,7 @@ reg [3:0] present_state, next_state;
                         w[15][t] <= 0;
 
                     if( memIndex > 1 ) begin
-                        { A[t], B[t], C[t], D[t], E[t], F[t], G[t], H[t] } <= sha256_op( t, memIndex-2 );
+                        { A[t], B[t], C[t], D[t], E[t], F[t], G[t], H[t] } <= sha256_op( t, memIndex-2,precomp[t] );
                         //$display("A[%d]: %h", computeCycle-1, A[0]);
                     end
 
@@ -150,14 +162,14 @@ reg [3:0] present_state, next_state;
                 //$display("H[0]: %h", h[0][0] + A[0]);
 
                 for( int k = 0; k <= N; k++) begin
-                    h[0][k] <= 32'h6a09e667; // updateH
-                    h[1][k] <= 32'hbb67ae85;
-                    h[2][k] <= 32'h3c6ef372;
-                    h[3][k] <= 32'ha54ff53a;
-                    h[4][k] <= 32'h510e527f;
-                    h[5][k] <= 32'h9b05688c;
-                    h[6][k] <= 32'h1f83d9ab;
-                    h[7][k] <= 32'h5be0cd19;
+                    h[0] <= 32'h6a09e667; // updateH
+                    h[1] <= 32'hbb67ae85;
+                    h[2] <= 32'h3c6ef372;
+                    h[3] <= 32'ha54ff53a;
+                    h[4] <= 32'h510e527f;
+                    h[5] <= 32'h9b05688c;
+                    h[6] <= 32'h1f83d9ab;
+                    h[7] <= 32'h5be0cd19;
 
                     A[k] <= 32'h6a09e667; // Update ABCD...
                     B[k] <= 32'hbb67ae85;
@@ -169,14 +181,14 @@ reg [3:0] present_state, next_state;
                     H[k] <= 32'h5be0cd19;
 
                     // COULD BE ASSIGNED BY SHIFTING
-                    hphase2[0][k] <= h[0][k] + A[k];
-                    hphase2[1][k] <= h[1][k] + B[k];
-                    hphase2[2][k] <= h[2][k] + C[k];
-                    hphase2[3][k] <= h[3][k] + D[k];
-                    hphase2[4][k] <= h[4][k] + E[k];
-                    hphase2[5][k] <= h[5][k] + F[k];
-                    hphase2[6][k] <= h[6][k] + G[k];
-                    hphase2[7][k] <= h[7][k] + H[k];
+                    hphase2[0][k] <= h[0] + A[k];
+                    hphase2[1][k] <= h[1] + B[k];
+                    hphase2[2][k] <= h[2] + C[k];
+                    hphase2[3][k] <= h[3] + D[k];
+                    hphase2[4][k] <= h[4] + E[k];
+                    hphase2[5][k] <= h[5] + F[k];
+                    hphase2[6][k] <= h[6] + G[k];
+                    hphase2[7][k] <= h[7] + H[k];
                 end
             end
 
@@ -186,6 +198,11 @@ reg [3:0] present_state, next_state;
                 computeCycle <= 15;
 
                 for( int t = 0; t <= N; t++) begin
+				if (memIndex == 1) 
+					precomp[t] <= H[t] + k[memIndex-1];
+
+				if (memIndex > 1 ) 
+					precomp[t] <= G[t] + k[memIndex-1];
                     if( memIndex <= 8 )
                         w[15][t] <= hphase2[memIndex-1][t];
                     else if( memIndex == 9)
@@ -198,7 +215,7 @@ reg [3:0] present_state, next_state;
                     for(int i = 0; i < 15; i++) w[i][t] <= w[i+1][t];
 
                     if( memIndex > 1 ) begin
-                        { A[t], B[t], C[t], D[t], E[t], F[t], G[t], H[t] } <= sha256_op( t, memIndex-2 );
+                        { A[t], B[t], C[t], D[t], E[t], F[t], G[t], H[t] } <= sha256_op( t, memIndex-2,precomp[t] );
                         //$display("A[%d]: %h", computeCycle-1, A[0]);
                     end
                 end                   
@@ -214,10 +231,11 @@ reg [3:0] present_state, next_state;
                     for(int i = 0; i < 15; i++)begin
                         w[i][t] <= w[i+1][t];
                     end 
+					precomp[t] <= G[t]+ k[computeCycle+1];
                     
                     w[15][t] <= newWt( t ); // Calculate new W[t]
             
-                    { A[t], B[t], C[t], D[t], E[t], F[t], G[t], H[t] } <= sha256_op( t, computeCycle ); // Do a sha256 operation
+                    { A[t], B[t], C[t], D[t], E[t], F[t], G[t], H[t] } <= sha256_op( t, computeCycle,precomp[t] ); // Do a sha256 operation
                 end
 
                 computeCycle <= computeCycle + 1;
@@ -226,32 +244,19 @@ reg [3:0] present_state, next_state;
                 mem_we <= 1;
                 mem_addr <= output_addr-16'd1; // Why minus 1? I have no idea
                 memIndex <= 0;
-
-                // for( int t = 0; t <= N; t++) begin
-                //     for( int j = 0; j <= 15; j++) begin
-                //         $display("w[%t][%d]: %h ",j, t, w[j][t]);
-                //     end
-                // end
             end
             WRITEMSG: begin
                 mem_addr <= mem_addr + 16'd1;
-                mem_write_data <= h[0][memIndex]+A[memIndex];
+                mem_write_data <= h[0]+A[memIndex];
                 memIndex <= memIndex + 1;
             end
             END: begin
-                //for(int i = 0; i <= 7; i++) $display("h[%d]: %h", i, h[i][0]);
                 done <= 1;
                 mem_we <= 0;
-
-                // for( int b = 0; b <= N; b++ ) begin
-                //     for(int j = 0; j <= 15; j++) 
-                //         $display("w[%d][%d]: %h ",j, b, w[j][b]);
-                //     $display("------------");
-                // end
-                
             end
         endcase
     end
+	
 
 // Right Rotation
     function logic [31:0] rightrotate(input logic [31:0] x, input logic [7:0] r); begin
@@ -274,7 +279,7 @@ function logic [31:0] newWt(input int n);
 endfunction
 
 // Sha256 Operation
-function logic [255:0] sha256_op( input int n, p);
+function logic [255:0] sha256_op( input int n, p,input logic [31:0] precomp);
 	begin
 	logic [31:0] s0, s1;
 	logic [31:0] maj, ch, tee1, tee2;
@@ -285,12 +290,9 @@ function logic [255:0] sha256_op( input int n, p);
 		maj = ( A[n] & B[n] ) ^ ( A[n] & C[n] ) ^ ( B[n] & C[n] );
 		
 		tee2 = s0 + maj;
-        tee1 = H[n] + s1 + ch + k[p] + w[15][n];
+        tee1 = precomp +  s1 + ch  + w[15][n];
 
-        if(M== 1 && n == 1)begin
-            //$display("%d: W[%d]: %h", n, p, w[15][n] );
-            //$display("A[%d]: %h --> A[%d]: %h", p, A[n], p, tee1 + tee2 );
-        end
+
         
 		
 		sha256_op = { tee1 + tee2, A[n], B[n], C[n], D[n] + tee1, E[n], F[n] ,G[n] };
