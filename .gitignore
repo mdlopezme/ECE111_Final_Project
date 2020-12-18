@@ -5,6 +5,8 @@
 !/excel
 !/REPORT
 !/README
+!/messages
+!*.txt
 !.gitignore
 !*.sv
 !*.pdf
